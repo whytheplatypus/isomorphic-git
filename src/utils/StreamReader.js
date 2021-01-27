@@ -45,6 +45,9 @@ export class StreamReader {
   async read(n) {
     if (this.eof()) return
     if (!this.started) await this._init()
+    if (this._ended) {
+      return null
+    }
     if (this.cursor + n > this.buffer.length) {
       this._trim()
       await this._accumulate(n)

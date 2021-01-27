@@ -17,6 +17,9 @@ const corsProxify = (corsProxy, url) =>
     : `${corsProxy}/${url.replace(/^https?:\/\//, '')}`
 
 const updateHeaders = (headers, auth) => {
+  if (auth === undefined) {
+    return
+  }
   // Update the basic auth header
   if (auth.username || auth.password) {
     headers.Authorization = calculateBasicAuthHeader(auth)
@@ -200,5 +203,5 @@ export const GitRemoteHTTP = {
       throw new HttpError(res.statusCode, res.statusMessage, response)
     }
     return res
-  }
+  },
 }

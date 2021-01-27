@@ -18,15 +18,17 @@ export function writeUploadPackRequestV2({
   wants = [...new Set(wants)] // remove duplicates
   const packstream = []
   // command
-  packstream.push(GitPktLine.encode('command=ls-refs\n'))
+  packstream.push(GitPktLine.encode('command=fetch\n'))
   // capability-list
   packstream.push(GitPktLine.encode(`agent=${pkg.agent}\n`))
+
+  // [command-args]
+  packstream.push(GitPktLine.delim())
+
   for (const cap of capabilities) {
     packstream.push(GitPktLine.encode(`${cap}\n`))
   }
 
-  // [command-args]
-  packstream.push(GitPktLine.delim())
   for (const oid of wants) {
     packstream.push(GitPktLine.encode(`want ${oid}`))
   }
