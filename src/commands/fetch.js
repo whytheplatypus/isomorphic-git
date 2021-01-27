@@ -1,8 +1,6 @@
 // @ts-check
 import '../typedefs.js'
 
-import { getRemoteInfo2 } from '../api/getRemoteInfo2.js'
-import { listServerRefs } from '../api/listServerRefs.js'
 import { _currentBranch } from '../commands/currentBranch.js'
 import { MissingParameterError } from '../errors/MissingParameterError.js'
 import { RemoteCapabilityError } from '../errors/RemoteCapabilityError.js'
@@ -22,8 +20,8 @@ import { forAwait } from '../utils/forAwait.js'
 import { join } from '../utils/join.js'
 import { pkg } from '../utils/pkg.js'
 import { splitLines } from '../utils/splitLines.js'
-import { parseUploadPackResponse } from '../wire/parseUploadPackResponseV2.js'
-import { writeUploadPackRequestV2 } from '../wire/writeUploadPackRequestV2.js'
+import { parseUploadPackResponse } from '../wire/parseUploadPackResponse.js'
+import { writeUploadPackRequest } from '../wire/writeUploadPackRequest.js'
 
 /**
  *
@@ -112,7 +110,7 @@ export async function _fetch({
   }
 
   const GitRemoteHTTP = GitRemoteManager.getRemoteHelperFor({ url })
-  let remoteHTTP = await getRemoteInfo2({
+  const remoteHTTP = await GitRemoteHTTP.discover({
     http,
     onAuth,
     onAuthSuccess,
@@ -121,43 +119,10 @@ export async function _fetch({
     service: 'git-upload-pack',
     url,
     headers,
-    protocolVersion: 2,
+    protocolVersion: 1,
   })
   const auth = remoteHTTP.auth // hack to get new credentials from CredentialManager API
-
-  let remoteRefs = remoteHTTP.refs
-  if (remoteHTTP.protocolVersion === 2) {
-    const serverRefsList = await listServerRefs({
-      http,
-      onAuth,
-      onAuthSuccess,
-      onAuthFailure,
-      corsProxy,
-      url,
-      headers,
-      symrefs: true,
-    })
-    remoteRefs = new Map()
-    for (const pair of serverRefsList) {
-      remoteRefs.set(pair.ref, pair.oid)
-    }
-    const cap = remoteHTTP.capabilities
-    remoteHTTP.capabilities = new Set(cap.fetch.split(' '))
-  } else {
-    remoteHTTP = await GitRemoteHTTP.discover({
-      http,
-      onAuth,
-      onAuthSuccess,
-      onAuthFailure,
-      corsProxy,
-      service: 'git-upload-pack',
-      url,
-      headers,
-      protocolVersion: 1,
-    })
-    remoteRefs = remoteHTTP.refs
-  }
-
+  const remoteRefs = remoteHTTP.refs
   // For the special case of an empty repository with no refs, return null.
   if (remoteRefs.size === 0) {
     return {
@@ -170,13 +135,13 @@ export async function _fetch({
   if (depth !== null && !remoteHTTP.capabilities.has('shallow')) {
     throw new RemoteCapabilityError('shallow', 'depth')
   }
-  if (since !== null && !remoteHTTP.capabilities.has('shallow')) {
+  if (since !== null && !remoteHTTP.capabilities.has('deepen-since')) {
     throw new RemoteCapabilityError('deepen-since', 'since')
   }
-  if (exclude.length > 0 && !remoteHTTP.capabilities.has('shallow')) {
+  if (exclude.length > 0 && !remoteHTTP.capabilities.has('deepen-not')) {
     throw new RemoteCapabilityError('deepen-not', 'exclude')
   }
-  if (relative === true && !remoteHTTP.capabilities.has('shallow')) {
+  if (relative === true && !remoteHTTP.capabilities.has('deepen-relative')) {
     throw new RemoteCapabilityError('deepen-relative', 'relative')
   }
   // Figure out the SHA for the requested ref
@@ -237,7 +202,7 @@ export async function _fetch({
   haves = [...new Set(haves)]
   const oids = await GitShallowManager.read({ fs, gitdir })
   const shallows = remoteHTTP.capabilities.has('shallow') ? [...oids] : []
-  const packstream = writeUploadPackRequestV2({
+  const packstream = writeUploadPackRequest({
     capabilities,
     wants,
     haves,
@@ -296,15 +261,13 @@ export async function _fetch({
     // But wait, maybe it was a symref, like 'HEAD'!
     // We need to save all the refs in the symref chain (sigh).
     const symrefs = new Map()
+    let bail = 10
     let key = fullref
-    if (remoteHTTP.symrefs) {
-      let bail = 10
-      while (bail--) {
-        const value = remoteHTTP.symrefs.get(key)
-        if (value === undefined) break
-        symrefs.set(key, value)
-        key = value
-      }
+    while (bail--) {
+      const value = remoteHTTP.symrefs.get(key)
+      if (value === undefined) break
+      symrefs.set(key, value)
+      key = value
     }
     // final value must not be a symref but a real ref
     const realRef = remoteRefs.get(key)
@@ -330,7 +293,7 @@ export async function _fetch({
       gitdir,
       remote,
       refs: remoteRefs,
-      symrefs: remoteHTTP.symrefs || new Map(),
+      symrefs: remoteHTTP.symrefs,
       tags,
       prune,
       pruneTags,
@@ -340,7 +303,7 @@ export async function _fetch({
     }
   }
   // We need this value later for the `clone` command.
-  response.HEAD = remoteRefs.get('HEAD')
+  response.HEAD = remoteHTTP.symrefs.get('HEAD')
   // AWS CodeCommit doesn't list HEAD as a symref, but we can reverse engineer it
   // Find the SHA of the branch called HEAD
   if (response.HEAD === undefined) {
