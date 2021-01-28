@@ -20,6 +20,7 @@ import { expandOid } from './api/expandOid.js'
 import { expandRef } from './api/expandRef.js'
 import { fastForward } from './api/fastForward.js'
 import { fetch } from './api/fetch.js'
+import { fetch2 } from './api/fetch2.js'
 import { findMergeBase } from './api/findMergeBase.js'
 import { findRoot } from './api/findRoot.js'
 import { getConfig } from './api/getConfig.js'
@@ -92,6 +93,7 @@ export {
   expandRef,
   fastForward,
   fetch,
+  fetch2,
   findMergeBase,
   findRoot,
   getRemoteInfo,
