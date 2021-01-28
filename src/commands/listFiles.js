@@ -1,8 +1,8 @@
 // @ts-check
-import { _readTree } from '../commands/readTree'
+import { _readTree } from '../commands/readTree.js'
 import { GitIndexManager } from '../managers/GitIndexManager.js'
 import { GitRefManager } from '../managers/GitRefManager.js'
-import { join } from '../utils/join'
+import { join } from '../utils/join.js'
 
 /**
  * @param {object} args
@@ -56,7 +56,7 @@ async function accumulateFilesFromOid({
         prefix: join(prefix, entry.path),
       })
     } else {
-      filenames.push(join(prefix, entry.path))
+      filenames.push({entry: entry, path: join(prefix, entry.path)})
     }
   }
 }
