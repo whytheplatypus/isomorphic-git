@@ -86,6 +86,7 @@ export async function _fetch({
   relative = false,
   tags = false,
   singleBranch = false,
+  blobless = false,
   headers = {},
   prune = false,
   pruneTags = false,
@@ -237,6 +238,7 @@ export async function _fetch({
   haves = [...new Set(haves)]
   const oids = await GitShallowManager.read({ fs, gitdir })
   const shallows = remoteHTTP.capabilities.has('shallow') ? [...oids] : []
+  const filters = blobless ? ['blob:none'] : []
   const packstream = writeUploadPackRequestV2({
     capabilities,
     wants,
@@ -245,6 +247,7 @@ export async function _fetch({
     depth,
     since,
     exclude,
+    filters,
   })
   // CodeCommit will hang up if we don't send a Content-Length header
   // so we can't stream the body.
